@@ -198,6 +198,12 @@ type
     /// </summary>
     Trace
   );
+  TOperationTypeHelper = record helper for TOperationType
+  public
+    function ToString: string;
+    class function FromString(const AValue: string): TOperationType; static;
+  end;
+
 {$ENDREGION}
   
   /// <summary>
@@ -248,7 +254,7 @@ type
   /// <summary>
   /// ExternalDocs object
   /// </summary>
-  TOpenAPIExternalDocumentation = class
+  TOpenAPIExternalDocumentation = class(TOpenAPIModel)
   private
     FDescription: NullString;
     FUrl: string;
@@ -281,7 +287,7 @@ type
     FStyle: Nullable<TParameterStyle>;
     FExplode: NullBoolean;
     FAllowReserved: NullBoolean;
-    FSchema: TOpenApiSchema;
+    FSchema: TOpenApiSchemaContainer;
     FExamples: TOpenApiExamples;
     FContent: TOpenApiMediaTypeMap;
     FExample: TOpenAPIAny;
@@ -362,7 +368,7 @@ type
     /// The schema defining the type used for the parameter.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
-    property Schema: TOpenApiSchema read FSchema write FSchema;
+    property Schema: TOpenApiSchemaContainer read FSchema write FSchema;
 
     /// <summary>
     /// Examples of the media type. Each example SHOULD contain a value
@@ -477,7 +483,7 @@ type
   /// </summary>
   TOpenAPIMediaType = class(TOpenAPIModel)
   private
-    FSchema: TOpenAPISchema;
+    FSchema: TOpenApiSchemaContainer;
     FExamples: TOpenAPIExampleMap;
     FEncoding: TOpenAPIEncodingMap;
     FExample: TOpenAPIAny;
@@ -488,13 +494,13 @@ type
     /// <summary>
     /// The schema defining the type used for the request body.
     /// </summary>
-    [NeonInclude(IncludeIf.NotEmpty)]
-    property Schema: TOpenAPISchema read FSchema write FSchema;
+    property Schema: TOpenApiSchemaContainer read FSchema write FSchema;
 
     /// <summary>
     /// Example of the media type.
     /// The example object SHOULD be in the correct format as specified by the media type.
     /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
     property Example: TOpenAPIAny read FExample write FExample;
 
     /// <summary>
@@ -541,7 +547,7 @@ type
     FStyle: Nullable<TParameterStyle>;
     FExplode: NullBoolean;
     FAllowReserved: NullBoolean;
-    FSchema: TOpenAPISchema;
+    FSchema: TOpenAPISchemaContainer;
     FExamples: TOpenAPIExampleMap;
     FContent: TOpenAPIMediaTypeMap;
     FExample: TOpenAPIAny;
@@ -599,8 +605,7 @@ type
     /// <summary>
     /// The schema defining the type used for the header.
     /// </summary>
-    [NeonInclude(IncludeIf.NotEmpty)]
-    property Schema: TOpenAPISchema read FSchema write FSchema;
+    property Schema: TOpenAPISchemaContainer read FSchema write FSchema;
 
     /// <summary>
     /// Example of the media type.
@@ -769,6 +774,7 @@ type
   public
     constructor Create;
     destructor Destroy; override;
+    function AddMediaType(const AKeyName: string): TOpenAPIMediaType;
   public
     /// <summary>
     /// Indicates if object is populated with data or is just a reference to the data
@@ -813,7 +819,7 @@ type
   /// <summary>
   ///   An object representing a Server Variable for server Url template substitution
   /// </summary>
-  TOpenAPIServerVariable = class
+  TOpenAPIServerVariable = class(TOpenAPIModel)
   private
     FEnum: TArray<string>;
     FDefault_: string;
@@ -844,7 +850,7 @@ type
   /// <summary>
   ///   An object representing a Server
   /// </summary>
-  TOpenAPIServer = class
+  TOpenAPIServer = class(TOpenAPIModel)
   private
     FDescription: NullString;
     FVariables: TOpenAPIServerVariableMap;
@@ -1227,6 +1233,10 @@ type
     constructor Create;
     destructor Destroy; override;
   public
+    procedure AddTag(const AName: string);
+    function AddResponse(ACode: Integer): TOpenAPIResponse; overload;
+    function AddResponse(const AName: string): TOpenAPIResponse; overload;
+    function AddRequestBody(const ADescription: string): TOpenAPIRequestBody;
     function AddParameter(const AName, ALocation: string): TOpenAPIParameter;
   public
     /// <summary>
@@ -1333,7 +1343,7 @@ type
   /// <summary>
   /// The object provides metadata about the API
   /// </summary>
-  TOpenAPIInfo = class
+  TOpenAPIInfo = class(TOpenAPIModel)
   private
     FContact: TOpenAPIContact;
     FDescription: NullString;
@@ -1381,9 +1391,9 @@ type
   /// <summary>
   /// Component Object.
   /// </summary>
-  TOpenAPIComponents = class
+  TOpenAPIComponents = class(TOpenAPIModel)
   private
-    FSchemas: TOpenAPISchemaMap;
+    FSchemas: TOpenAPISchemaContainerMap;
     FResponses: TOpenAPIResponseMap;
     FParameters: TOpenAPIParameterMap;
     FExamples: TOpenAPIExampleMap;
@@ -1392,6 +1402,7 @@ type
     FSecuritySchemes: TOpenAPISecuritySchemeMap;
     FLinks: TOpenAPILinkMap;
     FCallbacks: TOpenAPICallbackMap;
+    function AddSecurityScheme(const AName, ADescription: string; AType: TSecurityScheme): TOpenAPISecurityScheme;
   public
     constructor Create;
     destructor Destroy; override;
@@ -1399,7 +1410,6 @@ type
     function AddSchema(const AKeyName: string): TOpenAPISchema;
     function AddResponse(const AKeyName, ADescription: string): TOpenAPIResponse;
     function AddParameter(const AKeyName, AName, ALocation: string): TOpenAPIparameter;
-    function AddSecurityScheme(const AName, ADescription: string; AType: TSecurityScheme): TOpenAPISecurityScheme;
 
     function AddSecurityHttp(const AKeyName, ADescription, AScheme, ABearerFormat: string): TOpenAPISecurityScheme;
     function AddSecurityApiKey(const AKeyName, ADescription, AHeaderName: string; ALocation: TAPIKeyLocation): TOpenAPISecurityScheme;
@@ -1410,7 +1420,7 @@ type
     /// An object to hold reusable <see cref="OpenApiSchema"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
-    property Schemas: TOpenAPISchemaMap read FSchemas write FSchemas;
+    property Schemas: TOpenAPISchemaContainerMap read FSchemas write FSchemas;
 
     /// <summary>
     /// An object to hold reusable <see cref="OpenApiResponse"/> Objects.
@@ -1467,22 +1477,30 @@ type
   end;
 
   /// <summary>
-  ///   An object representing a Server Variable for server Url template substitution
+  /// Path Item Object: to describe the operations available on a single path.
   /// </summary>
-  TOpenAPIPathItem = class(TOpenAPIOperationMap)
+  TOpenAPIPathItem = class(TOpenAPIModel)
   private
     FSummary: NullString;
     FDescription: NullString;
     //FOperations: TOpenAPIOperationMap;
     FServers: TOpenAPIServerMap;
-    FParameters: TOpenAPIParameterMap;
+    FParameters: TOpenAPIParameters;
+    FGet: TOpenAPIOperation;
+    FPut: TOpenAPIOperation;
+    FHead: TOpenAPIOperation;
+    FPatch: TOpenAPIOperation;
+    FPost: TOpenAPIOperation;
+    FTrace: TOpenAPIOperation;
+    FDelete: TOpenAPIOperation;
+    FOptions: TOpenAPIOperation;
   public
     constructor Create;
     destructor Destroy; override;
   public
     function AddOperation(const AType: TOperationType): TOpenAPIOperation;
     function AddServer(const AKeyName: string): TOpenAPIServer;
-    function AddParameter(const AKeyName: string): TOpenAPIParameter;
+    function AddParameter(const AName: string): TOpenAPIParameter;
   public
     /// <summary>
     /// An optional, string summary, intended to apply to all operations in this path.
@@ -1495,10 +1513,52 @@ type
     property Description: NullString read FDescription write FDescription;
 
     /// <summary>
-    /// Gets the definition of operations on this path.
+    /// Get Operation
     /// </summary>
-    //[NeonInclude(IncludeIf.NotEmpty)]
-    //property Operations: TOpenAPIOperationMap read FOperations write FOperations;
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Get: TOpenAPIOperation read FGet write FGet;
+
+    /// <summary>
+    /// Put Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Put: TOpenAPIOperation read FPut write FPut;
+
+    /// <summary>
+    /// Post Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Post: TOpenAPIOperation read FPost write FPost;
+
+    /// <summary>
+    /// Delete Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Delete: TOpenAPIOperation read FDelete write FDelete;
+
+    /// <summary>
+    /// Options Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Options: TOpenAPIOperation read FOptions write FOptions;
+
+    /// <summary>
+    /// Head Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Head: TOpenAPIOperation read FHead write FHead;
+
+    /// <summary>
+    /// Patch Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Patch: TOpenAPIOperation read FPatch write FPatch;
+
+    /// <summary>
+    /// Trace Operation
+    /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
+    property Trace: TOpenAPIOperation read FTrace write FTrace;
 
     /// <summary>
     /// An alternative server array to service all operations in this path.
@@ -1511,7 +1571,7 @@ type
     /// These parameters can be overridden at the operation level, but cannot be removed there.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
-    property Parameters: TOpenAPIParameterMap read FParameters write FParameters;
+    property Parameters: TOpenAPIParameters read FParameters write FParameters;
 
     /// <summary>
     /// This object MAY be extended with Specification Extensions.
@@ -1528,7 +1588,7 @@ type
   ///   A document (or set of documents) that defines or describes an API. An Openapi
   ///   definition uses and conforms to the Openapi Specification
   /// </summary>
-  TOpenAPIDocument = class
+  TOpenAPIDocument = class(TOpenAPIModel)
   private
     FInfo: TOpenAPIInfo;
     FOpenapi: string;
@@ -1539,11 +1599,12 @@ type
     FTags: TOpenAPITags;
     FExternalDocs: TOpenAPIExternalDocs;
   public
-    constructor Create;
+    constructor Create(const AVersion: string);
     destructor Destroy; override;
   public
     function AddServer: TOpenAPIServer;
     function AddPath(const AKeyName: string): TOpenAPIPathItem;
+    function AddTag(const AName, ADescription: string): TOpenAPITag;
     procedure AddSecurity(ASchemeName: string; AParams: TArray<string>);
   public
     /// <summary>
@@ -1601,9 +1662,6 @@ type
 
 implementation
 
-uses
-  Neon.Core.Utils;
-
 { TOpenAPIServer }
 
 constructor TOpenAPIServer.Create;
@@ -1628,14 +1686,20 @@ end;
 
 function TOpenAPIResponse.AddLink(const AKeyName: string): TOpenAPILink;
 begin
-  Result := TOpenAPILink.Create;
-  FLinks.Add(AKeyName, Result);
+  if not FLinks.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPILink.Create;
+    FLinks.Add(AKeyName, Result);
+  end;
 end;
 
 function TOpenAPIResponse.AddMediaType(const AKeyName: string): TOpenAPIMediaType;
 begin
-  Result := TOpenAPIMediaType.Create;
-  FContent.Add(AKeyName, Result);
+  if not FContent.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIMediaType.Create;
+    FContent.Add(AKeyName, Result);
+  end;
 end;
 
 constructor TOpenAPIResponse.Create;
@@ -1656,33 +1720,46 @@ end;
 
 function TOpenAPIResponse.AddHeader(const AKeyName: string): TOpenAPIHeader;
 begin
-  Result := TOpenAPIHeader.Create;
-  FHeaders.Add(AKeyName, Result);
+  if not FHeaders.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIHeader.Create;
+    FHeaders.Add(AKeyName, Result);
+  end;
 end;
 
 { TOpenAPIComponents }
 
 function TOpenAPIComponents.AddParameter(const AKeyName, AName, ALocation: string): TOpenAPIparameter;
 begin
-  Result := TOpenAPIParameter.Create;
+  if not FParameters.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIParameter.Create;
+    FParameters.Add(AKeyName, Result);
+  end;
   Result.Name := AName;
   Result.In_ := ALocation;
-
-  FParameters.Add(AKeyName, Result);
 end;
 
 function TOpenAPIComponents.AddResponse(const AKeyName, ADescription: string): TOpenAPIResponse;
 begin
-  Result := TOpenAPIResponse.Create;
+  if not FResponses.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIResponse.Create;
+    FResponses.Add(AKeyName, Result);
+  end;
   Result.Description := ADescription;
-
-  FResponses.Add(AKeyName, Result);
 end;
 
 function TOpenAPIComponents.AddSchema(const AKeyName: string): TOpenAPISchema;
+var
+  LContainer: TOpenAPISchemaContainer;
 begin
-  Result := TOpenAPISchema.Create;
-  FSchemas.Add(AKeyName, Result);
+  if not FSchemas.TryGetValue(AKeyName, LContainer) then
+  begin
+    LContainer := TOpenAPISchemaContainer.Create;
+    FSchemas.Add(AKeyName, LContainer);
+  end;
+  Result := LContainer.JSONSchema;
 end;
 
 function TOpenAPIComponents.AddSecurityApiKey(const AKeyName, ADescription,
@@ -1718,16 +1795,18 @@ end;
 function TOpenAPIComponents.AddSecurityScheme(const AName, ADescription: string;
   AType: TSecurityScheme): TOpenAPISecurityScheme;
 begin
-  Result := TOpenAPISecurityScheme.Create;
+  if not FSecuritySchemes.TryGetValue(AName, Result) then
+  begin
+    Result := TOpenAPISecurityScheme.Create;
+    FSecuritySchemes.Add(AName, Result);
+  end;
   Result.Type_ := AType;
   Result.Description := ADescription;
-
-  FSecuritySchemes.Add(AName, Result);
 end;
 
 constructor TOpenAPIComponents.Create;
 begin
-  FSchemas := TOpenAPISchemaMap.Create;
+  FSchemas := TOpenAPISchemaContainerMap.Create;
   FResponses := TOpenAPIResponseMap.Create;
   FParameters := TOpenAPIParameterMap.Create;
   FExamples := TOpenAPIExampleMap.Create;
@@ -1794,15 +1873,21 @@ end;
 
 function TOpenAPIDocument.AddPath(const AKeyName: string): TOpenAPIPathItem;
 begin
-  Result := TOpenAPIPathItem.Create;
-  FPaths.Add(AKeyName, Result);
+  if not AKeyName.StartsWith('/') then
+    raise EOpenAPIException.Create('A path MUST begin with a forward slash "/"');
+
+  if not FPaths.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIPathItem.Create;
+    FPaths.Add(AKeyName, Result);
+  end;
 end;
 
 procedure TOpenAPIDocument.AddSecurity(ASchemeName: string; AParams: TArray<string>);
 var
-  s: TOpenAPISecurityScheme;
+  LScheme: TOpenAPISecurityScheme;
 begin
-  if Assigned(FComponents) and FComponents.SecuritySchemes.TryGetValue(ASchemeName, s) then
+  if FComponents.SecuritySchemes.TryGetValue(ASchemeName, LScheme) then
     FSecurity.Add(ASchemeName, AParams)
   else
     raise EOpenAPIException.CreateFmt('The scheme [%s] does not exists in securityDefinitions', [ASchemeName]);
@@ -1814,8 +1899,19 @@ begin
   FServers.Add(Result);
 end;
 
-constructor TOpenAPIDocument.Create;
+function TOpenAPIDocument.AddTag(const AName, ADescription: string): TOpenAPITag;
 begin
+  Result := TOpenAPITag.Create;
+  Result.Name := AName;
+  Result.Description := ADescription;
+
+  FTags.Add(Result);
+end;
+
+constructor TOpenAPIDocument.Create(const AVersion: string);
+begin
+  FOpenapi := AVersion;
+
   FInfo := TOpenAPIInfo.Create;
   FPaths := TOpenAPIPathMap.Create;
   FServers := TOpenAPIServers.Create;
@@ -1913,35 +2009,66 @@ end;
 { TOpenAPIPathItem }
 
 function TOpenAPIPathItem.AddOperation(const AType: TOperationType): TOpenAPIOperation;
+
+  function GetOrCreate(var ASource: TOpenAPIOperation): TOpenAPIOperation;
+  begin
+    if not Assigned(ASource) then
+      ASource := TOpenAPIOperation.Create;
+    Result := ASource;
+  end;
+
 begin
-  Result := TOpenAPIOperation.Create;
-  Self.Add(AType, Result);
+  case AType of
+    TOperationType.Get:       Result := GetOrCreate(FGet);
+    TOperationType.Put:       Result := GetOrCreate(FPut);
+    TOperationType.Post:      Result := GetOrCreate(FPost);
+    TOperationType.Delete:    Result := GetOrCreate(FDelete);
+    TOperationType.Options:   Result := GetOrCreate(FOptions);
+    TOperationType.Head:      Result := GetOrCreate(FHead);
+    TOperationType.Patch:     Result := GetOrCreate(FPatch);
+    TOperationType.Trace:     Result := GetOrCreate(FTrace);
+  else
+    raise EOpenAPIException.CreateFmt('Operation Type [%s] not supported', []);
+  end;
 end;
 
-function TOpenAPIPathItem.AddParameter(const AKeyName: string): TOpenAPIParameter;
+function TOpenAPIPathItem.AddParameter(const AName: string): TOpenAPIParameter;
 begin
   Result := TOpenAPIParameter.Create;
-  FParameters.Add(AKeyName, Result);
+  Result.Name := AName;
+  FParameters.Add(Result);
 end;
 
 function TOpenAPIPathItem.AddServer(const AKeyName: string): TOpenAPIServer;
 begin
-  Result := TOpenAPIServer.Create;
-  FServers.Add(AKeyName, Result);
+  if not FServers.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIServer.Create;
+    FServers.Add(AKeyName, Result);
+  end;
 end;
 
 constructor TOpenAPIPathItem.Create;
 begin
-  inherited;
   //FOperations := TOpenAPIOperationMap.Create;
   FServers := TOpenAPIServerMap.Create;
-  FParameters := TOpenAPIParameterMap.Create;
+  FParameters := TOpenAPIParameters.Create;
 end;
 
 destructor TOpenAPIPathItem.Destroy;
 begin
   FParameters.Free;
   FServers.Free;
+  FGet.Free;
+  FPut.Free;
+  FPost.Free;
+  FHead.Free;
+  FPatch.Free;
+  FPost.Free;
+  FTrace.Free;
+  FDelete.Free;
+  FOptions.Free;
+
   //FOperations.Free;
   inherited;
 end;
@@ -1959,6 +2086,36 @@ function TOpenAPIOperation.AddParameter(const AName, ALocation: string): TOpenAP
 begin
   Result := TOpenAPIParameter.Create(AName, ALocation);
   FParameters.Add(Result);
+end;
+
+function TOpenAPIOperation.AddRequestBody(const ADescription: string): TOpenAPIRequestBody;
+begin
+  if not Assigned(FRequestBody) then
+    FRequestBody := TOpenAPIRequestBody.Create;
+
+  FRequestBody.Description := ADescription;
+  FRequestBody.Required := True;
+
+  Result := FRequestBody;
+end;
+
+function TOpenAPIOperation.AddResponse(const AName: string): TOpenAPIResponse;
+begin
+  if not FResponses.TryGetValue(AName, Result) then
+  begin
+    Result := TOpenAPIResponse.Create;
+    FResponses.Add(AName, Result);
+  end;
+end;
+
+function TOpenAPIOperation.AddResponse(ACode: Integer): TOpenAPIResponse;
+begin
+  Result := AddResponse(ACode.ToString);
+end;
+
+procedure TOpenAPIOperation.AddTag(const AName: string);
+begin
+  FTags := FTags + [AName];
 end;
 
 constructor TOpenAPIOperation.Create;
@@ -2000,6 +2157,15 @@ begin
   inherited;
 end;
 
+function TOpenAPIRequestBody.AddMediaType(const AKeyName: string): TOpenAPIMediaType;
+begin
+  if not FContent.TryGetValue(AKeyName, Result) then
+  begin
+    Result := TOpenAPIMediaType.Create;
+    FContent.Add(AKeyName, Result);
+  end;
+end;
+
 { TOpenAPITag }
 
 constructor TOpenAPITag.Create;
@@ -2036,10 +2202,10 @@ end;
 
 constructor TOpenAPIMediaType.Create;
 begin
-  FSchema := TOpenAPISchema.Create;
+  FSchema := TOpenAPISchemaContainer.Create;
   FExamples := TOpenAPIExampleMap.Create;
   FEncoding := TOpenAPIEncodingMap.Create;
-  //FExample := TOpenAPIAny.Create;
+  FExample := TOpenAPIAny.Create;
 end;
 
 destructor TOpenAPIMediaType.Destroy;
@@ -2057,10 +2223,10 @@ end;
 constructor TOpenAPIHeader.Create;
 begin
   FReference := TOpenAPIReference.Create;
-  FSchema := TOpenAPISchema.Create;
+  FSchema := TOpenAPISchemaContainer.Create;
   FExamples := TOpenAPIExampleMap.Create;
   FContent := TOpenAPIMediaTypeMap.Create;
-  //FExample := TOpenAPIAny.Create;
+  FExample := TOpenAPIAny.Create;
 end;
 
 destructor TOpenAPIHeader.Destroy;
@@ -2092,7 +2258,7 @@ end;
 
 constructor TOpenAPIParameter.Create;
 begin
-  FSchema := TOpenApiSchema.Create;
+  FSchema := TOpenApiSchemaContainer.Create;
   FExamples := TOpenApiExamples.Create;
   FContent := TOpenApiMediaTypeMap.Create;
   FExample := TOpenAPIAny.Create;
@@ -2227,6 +2393,44 @@ end;
 constructor TOpenAPISecuritySchemeMap.Create;
 begin
   inherited Create([doOwnsValues]);
+end;
+
+{ TOperationTypeHelper }
+
+class function TOperationTypeHelper.FromString(const AValue: string): TOperationType;
+begin
+  if SameText(AValue, 'get') then
+    Result := TOperationType.Get
+  else if SameText(AValue, 'put') then
+    Result := TOperationType.Put
+  else if SameText(AValue, 'post') then
+    Result := TOperationType.Post
+  else if SameText(AValue, 'delete') then
+    Result := TOperationType.Delete
+  else if SameText(AValue, 'options') then
+    Result := TOperationType.Options
+  else if SameText(AValue, 'head') then
+    Result := TOperationType.Head
+  else if SameText(AValue, 'patch') then
+    Result := TOperationType.Patch
+  else if SameText(AValue, 'trace') then
+    Result := TOperationType.Trace
+  else
+    raise EOpenAPIException.CreateFmt('Operation [%s] not allowed', [AValue]);
+end;
+
+function TOperationTypeHelper.ToString: string;
+begin
+  case Self of
+    TOperationType.Get:      Result := 'get';
+    TOperationType.Put:      Result := 'put';
+    TOperationType.Post:     Result := 'post';
+    TOperationType.Delete:   Result := 'delete';
+    TOperationType.Options:  Result := 'options';
+    TOperationType.Head:     Result := 'head';
+    TOperationType.Patch:    Result := 'patch';
+    TOperationType.Trace:    Result := 'trace';
+  end;
 end;
 
 end.
