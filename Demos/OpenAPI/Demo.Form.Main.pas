@@ -11,10 +11,10 @@ uses
   Neon.Core.Types,
   Neon.Core.Persistence,
   Neon.Core.Persistence.JSON,
-  Neon.Core.Persistence.Swagger,
-  OpenAPI.Models,
-  OpenAPI.Schema,
-  OpenAPI.Serializer;
+  Neon.Core.Persistence.JSON.Schema,
+  OpenAPI.Model.Classes,
+  OpenAPI.Model.Schema,
+  OpenAPI.Neon.Serializers;
 
 type
   TPerson = class
@@ -109,24 +109,29 @@ begin
 
       LParameter := LOperation.AddParameter('id', 'query');
       LParameter.Description := 'Customer ID';
-      LParameter.Schema.JSONSchema.Type_ := 'string';
-      LParameter.Schema.JSONSchema.Enum.ValueFrom<TArray<string>>(['enum1', 'enum2']);
+      LParameter.Schema.Type_ := 'string';
+      LParameter.Schema.Enum.ValueFrom<TArray<string>>(['enum1', 'enum2']);
 
       LParameter := LOperation.AddParameter('country', 'query');
       LParameter.Description := 'Country Code';
-      LParameter.Schema.JSONSchema.Type_ := 'string';
-      LParameter.Schema.JSONSchema.Enum.ValueFrom<TArray<string>>(['it', 'en', 'de', 'ch', 'fr']);
+      LParameter.Schema.Type_ := 'string';
+      LParameter.Schema.Enum.ValueFrom<TArray<string>>(['it', 'en', 'de', 'ch', 'fr']);
 
       LParameter := LOperation.AddParameter('date', 'query');
       LParameter.Description := 'Date';
-      LParameter.Schema.JSONSchema.Type_ := 'string';
-      LParameter.Schema.JSONSchema.Format := 'date-time';
-      LParameter.Schema.JSONSchema.Enum.ValueFrom<TArray<string>>(['it', 'en', 'de', 'ch', 'fr']);
+      LParameter.Schema.Type_ := 'string';
+      LParameter.Schema.Format := 'date-time';
+      LParameter.Schema.Enum.ValueFrom<TArray<string>>(['it', 'en', 'de', 'ch', 'fr']);
 
       // Uses a JSON schema already existing as a TJSONObject
       LParameter := LOperation.AddParameter('person', 'query');
       LParameter.Description := 'Person Entity';
       LParameter.Schema.SetJSONObject(TNeonSchemaGenerator.ClassToJSONSchema(TPerson));
+
+      // Uses #ref
+      LParameter := LOperation.AddParameter('order', 'query');
+      LParameter.Description := 'Order Entity';
+      LParameter.Schema.Reference.Ref := '#comp/deidjed/';
 end;
 
 procedure TfrmMain.actCompAddResponsesExecute(Sender: TObject);
@@ -136,7 +141,7 @@ var
 begin
   LResponse := FDocument.Components.AddResponse('200', 'Successful Response');
   LMediaType := LResponse.AddMediaType('application/json');
-  LMediaType.Schema.JSONSchema.Reference.Ref := '#components/schemas/country';
+  LMediaType.Schema.Reference.Ref := '#components/schemas/country';
 end;
 
 procedure TfrmMain.actCompAddSchemasExecute(Sender: TObject);
@@ -185,9 +190,9 @@ var
 begin
   LParameter := FDocument.Components.AddParameter('idParam', 'id', 'query');
   LParameter.Description := 'Customer ID';
-  LParameter.Schema.JSONSchema.Type_ := 'string';
-  LParameter.Schema.JSONSchema.Enum.ValueFrom<TArray<string>>(['enum1', 'enum2']);
-  LParameter.Schema.JSONSchema.MaxLength := 123;
+  LParameter.Schema.Type_ := 'string';
+  LParameter.Schema.Enum.ValueFrom<TArray<string>>(['enum1', 'enum2']);
+  LParameter.Schema.MaxLength := 123;
 end;
 
 procedure TfrmMain.actJSONGenerateExecute(Sender: TObject);

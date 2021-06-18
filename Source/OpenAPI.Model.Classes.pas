@@ -19,7 +19,7 @@
 {  limitations under the License.                                              }
 {                                                                              }
 {******************************************************************************}
-unit OpenAPI.Models;
+unit OpenAPI.Model.Classes;
 
 interface
 
@@ -34,23 +34,15 @@ uses
   Neon.Core.Attributes,
   Neon.Core.Persistence,
 
-  OpenAPI.Any,
-  OpenAPI.Interfaces,
-  OpenAPI.Schema,
-  OpenAPI.Exceptions,
-  OpenAPI.Expressions,
-  OpenAPI.Reference;
+  OpenAPI.Core.Exceptions,
+  OpenAPI.Core.Interfaces,
+  OpenAPI.Model.Base,
+  OpenAPI.Model.Any,
+  OpenAPI.Model.Schema,
+  OpenAPI.Model.Expressions,
+  OpenAPI.Model.Reference;
 
 type
-  /// <summary>
-  /// Base class for OpenAPI model classes
-  /// </summary>
-  TOpenAPIModel = class
-  protected
-    function InternalCheckModel: Boolean; virtual;
-  public
-    function CheckModel: Boolean; inline;
-  end;
 
 {$REGION 'OpenAPI enum types'}
   [NeonEnumNames('matrix,label,form,simple,spaceDelimited,pipeDelimited,deepObject')]
@@ -237,13 +229,13 @@ type
   /// </summary>
   TOpenAPILicense = class(TOpenAPIModel)
   private
-    FName: string;
+    FName: NullString;
     FUrl: NullString;
   public
     /// <summary>
     /// REQUIRED. The license name used for the API.
     /// </summary>
-    property Name: string read FName write FName;
+    property Name: NullString read FName write FName;
 
     /// <summary>
     /// The Url pointing to the contact information. MUST be in the format of a Url.
@@ -287,7 +279,7 @@ type
     FStyle: Nullable<TParameterStyle>;
     FExplode: NullBoolean;
     FAllowReserved: NullBoolean;
-    FSchema: TOpenApiSchemaContainer;
+    FSchema: TOpenAPISchema;
     FExamples: TOpenApiExamples;
     FContent: TOpenApiMediaTypeMap;
     FExample: TOpenAPIAny;
@@ -368,7 +360,7 @@ type
     /// The schema defining the type used for the parameter.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
-    property Schema: TOpenApiSchemaContainer read FSchema write FSchema;
+    property Schema: TOpenAPISchema read FSchema write FSchema;
 
     /// <summary>
     /// Examples of the media type. Each example SHOULD contain a value
@@ -388,6 +380,7 @@ type
     /// To represent examples of media types that cannot naturally be represented in JSON or YAML,
     /// a string value can contain the example with escaping where necessary.
     /// </summary>
+    [NeonInclude(IncludeIf.NotEmpty)]
     property Example: TOpenAPIAny read FExample write FExample;
 
     /// <summary>
@@ -419,7 +412,7 @@ type
   /// <summary>
   /// Example Object.
   /// </summary>
-  TOpenAPIExample = class(TOpenAPIModel)
+  TOpenAPIExample = class(TOpenAPIModelReference)
   private
     FSummary: NullString;
     FDescription: NullString;
@@ -483,7 +476,7 @@ type
   /// </summary>
   TOpenAPIMediaType = class(TOpenAPIModel)
   private
-    FSchema: TOpenApiSchemaContainer;
+    FSchema: TOpenAPISchema;
     FExamples: TOpenAPIExampleMap;
     FEncoding: TOpenAPIEncodingMap;
     FExample: TOpenAPIAny;
@@ -494,7 +487,7 @@ type
     /// <summary>
     /// The schema defining the type used for the request body.
     /// </summary>
-    property Schema: TOpenApiSchemaContainer read FSchema write FSchema;
+    property Schema: TOpenAPISchema read FSchema write FSchema;
 
     /// <summary>
     /// Example of the media type.
@@ -520,7 +513,7 @@ type
     property Encoding: TOpenAPIEncodingMap read FEncoding write FEncoding;
 
     /// <summary>
-    /// Serialize <see cref="OpenApiExternalDocs"/> to Open Api v3.0.
+    /// Serialize <see cref="TOpenApiExternalDocs"/> to Open Api v3.0.
     /// </summary>
     //property Extensions: TObjectDictionary<string, IOpenApiExtension>;
   end;
@@ -536,7 +529,7 @@ type
   /// <summary>
   /// Header Object.
   /// </summary>
-  TOpenAPIHeader = class(TOpenAPIModel)
+  TOpenAPIHeader = class(TOpenAPIModelReference)
   private
     FUnresolvedReference: NullBoolean;
     FReference: TOpenAPIReference;
@@ -547,7 +540,7 @@ type
     FStyle: Nullable<TParameterStyle>;
     FExplode: NullBoolean;
     FAllowReserved: NullBoolean;
-    FSchema: TOpenAPISchemaContainer;
+    FSchema: TOpenAPISchema;
     FExamples: TOpenAPIExampleMap;
     FContent: TOpenAPIMediaTypeMap;
     FExample: TOpenAPIAny;
@@ -605,7 +598,7 @@ type
     /// <summary>
     /// The schema defining the type used for the header.
     /// </summary>
-    property Schema: TOpenAPISchemaContainer read FSchema write FSchema;
+    property Schema: TOpenAPISchema read FSchema write FSchema;
 
     /// <summary>
     /// Example of the media type.
@@ -717,7 +710,7 @@ type
     //Extensions: TObjectDictionary<string, TOpenAPIExtension>;
   end;
 
-  TOpenAPITag = class(TOpenAPIModel)
+  TOpenAPITag = class(TOpenAPIModelReference)
   private
     FName: NullString;
     FDescription: NullString;
@@ -764,7 +757,7 @@ type
   TOpenAPITags = class(TObjectList<TOpenAPITag>)
   end;
 
-  TOpenAPIRequestBody = class(TOpenAPIModel)
+  TOpenAPIRequestBody = class(TOpenAPIModelReference)
   private
     FUnresolvedReference: NullBoolean;
     FReference: TOpenAPIReference;
@@ -998,7 +991,7 @@ type
 
   TOpenAPIPathItem = class;
 
-  TOpenAPICallback = class(TOpenAPIModel)
+  TOpenAPICallback = class(TOpenAPIModelReference)
   private
     FPathItems: TObjectDictionary<TRuntimeExpression, TOpenAPIPathItem>;
     FUnresolvedReference: NullBoolean;
@@ -1115,7 +1108,7 @@ type
     /// </summary>
   end;
 
-  TOpenAPISecurityScheme = class(TOpenAPIModel)
+  TOpenAPISecurityScheme = class(TOpenAPIModelReference)
   private
     FType_: Nullable<TSecurityScheme>;
     FDescription: NullString;
@@ -1206,10 +1199,13 @@ type
     constructor Create;
   end;
 
-  TOpenAPISecurityRequirement = TPair<string, TArray<string>>;
+  TOpenAPISecurityRequirement = class(TDictionary<string, TArray<string>>)
+  end;
 
-  TOpenAPISecurityRequirements = class(TDictionary<string, TArray<string>>)
-
+  TOpenAPISecurityRequirements = class(TObjectList<TOpenAPISecurityRequirement>)
+  public
+    procedure AddSecurityRequirement(ASecuritySchemes: TOpenAPISecuritySchemeMap;
+        ASchemeName: string; AParams: TArray<string>);
   end;
 
   /// <summary>
@@ -1393,7 +1389,7 @@ type
   /// </summary>
   TOpenAPIComponents = class(TOpenAPIModel)
   private
-    FSchemas: TOpenAPISchemaContainerMap;
+    FSchemas: TOpenAPISchemaMap;
     FResponses: TOpenAPIResponseMap;
     FParameters: TOpenAPIParameterMap;
     FExamples: TOpenAPIExampleMap;
@@ -1407,6 +1403,7 @@ type
     constructor Create;
     destructor Destroy; override;
   public
+    function SchemaExists(const AKeyName: string): Boolean;
     function AddSchema(const AKeyName: string): TOpenAPISchema;
     function AddResponse(const AKeyName, ADescription: string): TOpenAPIResponse;
     function AddParameter(const AKeyName, AName, ALocation: string): TOpenAPIparameter;
@@ -1417,55 +1414,55 @@ type
     function AddSecurityOAuth2(const AKeyName, ADescription: string; AFlow: TOpenAPIOAuthFlows): TOpenAPISecurityScheme;
   public
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiSchema"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiSchema"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
-    property Schemas: TOpenAPISchemaContainerMap read FSchemas write FSchemas;
+    property Schemas: TOpenAPISchemaMap read FSchemas write FSchemas;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiResponse"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiResponse"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Responses: TOpenAPIResponseMap read FResponses write FResponses;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiParameter"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiParameter"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Parameters: TOpenAPIParameterMap read FParameters write FParameters;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiExample"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiExample"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Examples: TOpenAPIExampleMap read FExamples write FExamples;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiRequestBody"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiRequestBody"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property RequestBodies: TOpenAPIRequestBodyMap read FRequestBodies write FRequestBodies;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiHeader"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiHeader"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Headers: TOpenAPIHeaderMap read FHeaders write FHeaders;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiSecurityScheme"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiSecurityScheme"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property SecuritySchemes: TOpenAPISecuritySchemeMap read FSecuritySchemes write FSecuritySchemes;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiLink"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiLink"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Links: TOpenAPILinkMap read FLinks write FLinks;
 
     /// <summary>
-    /// An object to hold reusable <see cref="OpenApiCallback"/> Objects.
+    /// An object to hold reusable <see cref="TOpenApiCallback"/> Objects.
     /// </summary>
     [NeonInclude(IncludeIf.NotEmpty)]
     property Callbacks: TOpenAPICallbackMap read FCallbacks write FCallbacks;
@@ -1483,7 +1480,6 @@ type
   private
     FSummary: NullString;
     FDescription: NullString;
-    //FOperations: TOpenAPIOperationMap;
     FServers: TOpenAPIServerMap;
     FParameters: TOpenAPIParameters;
     FGet: TOpenAPIOperation;
@@ -1602,7 +1598,7 @@ type
     constructor Create(const AVersion: string);
     destructor Destroy; override;
   public
-    function AddServer: TOpenAPIServer;
+    function AddServer(const AURL, ADescription: string): TOpenAPIServer;
     function AddPath(const AKeyName: string): TOpenAPIPathItem;
     function AddTag(const AName, ADescription: string): TOpenAPITag;
     procedure AddSecurity(ASchemeName: string; AParams: TArray<string>);
@@ -1751,15 +1747,12 @@ begin
 end;
 
 function TOpenAPIComponents.AddSchema(const AKeyName: string): TOpenAPISchema;
-var
-  LContainer: TOpenAPISchemaContainer;
 begin
-  if not FSchemas.TryGetValue(AKeyName, LContainer) then
+  if not FSchemas.TryGetValue(AKeyName, Result) then
   begin
-    LContainer := TOpenAPISchemaContainer.Create;
-    FSchemas.Add(AKeyName, LContainer);
+    Result := TOpenApiSchema.Create;
+    FSchemas.Add(AKeyName, Result);
   end;
-  Result := LContainer.JSONSchema;
 end;
 
 function TOpenAPIComponents.AddSecurityApiKey(const AKeyName, ADescription,
@@ -1806,7 +1799,7 @@ end;
 
 constructor TOpenAPIComponents.Create;
 begin
-  FSchemas := TOpenAPISchemaContainerMap.Create;
+  FSchemas := TOpenAPISchemaMap.Create;
   FResponses := TOpenAPIResponseMap.Create;
   FParameters := TOpenAPIParameterMap.Create;
   FExamples := TOpenAPIExampleMap.Create;
@@ -1832,6 +1825,13 @@ begin
   inherited;
 end;
 
+function TOpenAPIComponents.SchemaExists(const AKeyName: string): Boolean;
+var
+  LSchema: TOpenAPISchema;
+begin
+  Result := FSchemas.TryGetValue(AKeyName, LSchema);
+end;
+
 { TOpenAPILink }
 
 constructor TOpenAPILink.Create;
@@ -1848,18 +1848,6 @@ begin
   FRequestBody.Free;
 
   inherited;
-end;
-
-{ TOpenAPIModel }
-
-function TOpenAPIModel.CheckModel: Boolean;
-begin
-  Result := InternalCheckModel;
-end;
-
-function TOpenAPIModel.InternalCheckModel: Boolean;
-begin
-  Result := True;
 end;
 
 { TOpenAPIParameterMap }
@@ -1886,16 +1874,24 @@ end;
 procedure TOpenAPIDocument.AddSecurity(ASchemeName: string; AParams: TArray<string>);
 var
   LScheme: TOpenAPISecurityScheme;
+  LSecReq: TOpenAPISecurityRequirement;
 begin
   if FComponents.SecuritySchemes.TryGetValue(ASchemeName, LScheme) then
-    FSecurity.Add(ASchemeName, AParams)
+  begin
+    LSecReq := TOpenAPISecurityRequirement.Create();
+    LSecreq.Add(ASchemeName, AParams);
+    FSecurity.Add(LSecReq);
+  end
   else
     raise EOpenAPIException.CreateFmt('The scheme [%s] does not exists in securityDefinitions', [ASchemeName]);
 end;
 
-function TOpenAPIDocument.AddServer: TOpenAPIServer;
+function TOpenAPIDocument.AddServer(const AURL, ADescription: string): TOpenAPIServer;
 begin
   Result := TOpenAPIServer.Create;
+  Result.Url := AURL;
+  if not ADescription.IsEmpty then
+    Result.Description := ADescription;
   FServers.Add(Result);
 end;
 
@@ -2028,7 +2024,7 @@ begin
     TOperationType.Patch:     Result := GetOrCreate(FPatch);
     TOperationType.Trace:     Result := GetOrCreate(FTrace);
   else
-    raise EOpenAPIException.CreateFmt('Operation Type [%s] not supported', []);
+    raise EOpenAPIException.CreateFmt('Operation Type [%s] not supported', [AType.ToString]);
   end;
 end;
 
@@ -2050,26 +2046,24 @@ end;
 
 constructor TOpenAPIPathItem.Create;
 begin
-  //FOperations := TOpenAPIOperationMap.Create;
   FServers := TOpenAPIServerMap.Create;
-  FParameters := TOpenAPIParameters.Create;
+  FParameters := TOpenAPIParameters.Create(True);
 end;
 
 destructor TOpenAPIPathItem.Destroy;
 begin
   FParameters.Free;
   FServers.Free;
+
   FGet.Free;
   FPut.Free;
   FPost.Free;
   FHead.Free;
   FPatch.Free;
-  FPost.Free;
   FTrace.Free;
   FDelete.Free;
   FOptions.Free;
 
-  //FOperations.Free;
   inherited;
 end;
 
@@ -2202,7 +2196,7 @@ end;
 
 constructor TOpenAPIMediaType.Create;
 begin
-  FSchema := TOpenAPISchemaContainer.Create;
+  FSchema := TOpenAPISchema.Create;
   FExamples := TOpenAPIExampleMap.Create;
   FEncoding := TOpenAPIEncodingMap.Create;
   FExample := TOpenAPIAny.Create;
@@ -2223,7 +2217,7 @@ end;
 constructor TOpenAPIHeader.Create;
 begin
   FReference := TOpenAPIReference.Create;
-  FSchema := TOpenAPISchemaContainer.Create;
+  FSchema := TOpenAPISchema.Create;
   FExamples := TOpenAPIExampleMap.Create;
   FContent := TOpenAPIMediaTypeMap.Create;
   FExample := TOpenAPIAny.Create;
@@ -2258,7 +2252,7 @@ end;
 
 constructor TOpenAPIParameter.Create;
 begin
-  FSchema := TOpenApiSchemaContainer.Create;
+  FSchema := TOpenAPISchema.Create;
   FExamples := TOpenApiExamples.Create;
   FContent := TOpenApiMediaTypeMap.Create;
   FExample := TOpenAPIAny.Create;
@@ -2431,6 +2425,23 @@ begin
     TOperationType.Patch:    Result := 'patch';
     TOperationType.Trace:    Result := 'trace';
   end;
+end;
+
+procedure TOpenAPISecurityRequirements.AddSecurityRequirement(
+    ASecuritySchemes: TOpenAPISecuritySchemeMap; ASchemeName: string; AParams:
+    TArray<string>);
+var
+  LScheme: TOpenAPISecurityScheme;
+  LSecReq: TOpenAPISecurityRequirement;
+begin
+  if ASecuritySchemes.TryGetValue(ASchemeName, LScheme) then
+  begin
+    LSecReq := TOpenAPISecurityRequirement.Create();
+    LSecreq.Add(ASchemeName, AParams);
+    Self.Add(LSecReq);
+  end
+  else
+    raise EOpenAPIException.CreateFmt('The scheme [%s] does not exists in securityDefinitions', [ASchemeName]);
 end;
 
 end.

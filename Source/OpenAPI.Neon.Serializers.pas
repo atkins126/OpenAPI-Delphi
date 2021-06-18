@@ -1,4 +1,4 @@
-unit OpenAPI.Serializer;
+unit OpenAPI.Neon.Serializers;
 
 interface
 
@@ -10,8 +10,10 @@ uses
   Neon.Core.Types,
   Neon.Core.Nullables,
 
-  OpenAPI.Any,
-  OpenAPI.Schema;
+  OpenAPI.Model.Any,
+  OpenAPI.Model.Base,
+  OpenAPI.Model.Classes,
+  OpenAPI.Model.Schema;
 
 type
   TOpenAPISerializer = class
@@ -81,6 +83,15 @@ type
     function Deserialize(AValue: TJSONValue; const AData: TValue; ANeonObject: TNeonRttiObject; AContext: IDeserializerContext): TValue; override;
   end;
 
+  TOpenAPIReferenceSerializer = class(TCustomSerializer)
+  protected
+    class function GetTargetInfo: PTypeInfo; override;
+    class function CanHandle(AType: PTypeInfo): Boolean; override;
+  public
+    function Serialize(const AValue: TValue; ANeonObject: TNeonRttiObject; AContext: ISerializerContext): TJSONValue; override;
+    function Deserialize(AValue: TJSONValue; const AData: TValue; ANeonObject: TNeonRttiObject; AContext: IDeserializerContext): TValue; override;
+  end;
+
   TOpenAPISchemaSerializer = class(TCustomSerializer)
   protected
     class function GetTargetInfo: PTypeInfo; override;
@@ -89,6 +100,8 @@ type
     function Serialize(const AValue: TValue; ANeonObject: TNeonRttiObject; AContext: ISerializerContext): TJSONValue; override;
     function Deserialize(AValue: TJSONValue; const AData: TValue; ANeonObject: TNeonRttiObject; AContext: IDeserializerContext): TValue; override;
   end;
+
+  procedure RegisterOpenAPISerializers(ARegistry: TNeonSerializerRegistry);
 
 implementation
 
@@ -320,7 +333,9 @@ begin
       .RegisterSerializer(TNullableInt64Serializer)
       .RegisterSerializer(TNullableDoubleSerializer)
       .RegisterSerializer(TNullableTDateTimeSerializer)
-      .RegisterSerializer(TOpenAPIAnySerializer)
+      // OpenAPI Models
+      //.RegisterSerializer(TOpenAPIAnySerializer)
+      .RegisterSerializer(TOpenAPIReferenceSerializer)
       .RegisterSerializer(TOpenAPISchemaSerializer)
   ;
 end;
@@ -352,44 +367,136 @@ var
   LValue: TOpenAPIAny;
 begin
   LValue := AValue.AsType<TOpenAPIAny>;
-  if not LValue.Value.IsEmpty then
-    Result := AContext.WriteDataMember(LValue.Value)
+  if LValue = nil then
+    Exit(nil);
+
+  if LValue.Value.IsEmpty then
+    Exit(nil);
+
+  Result := AContext.WriteDataMember(LValue.Value);
+  case ANeonObject.NeonInclude.Value of
+    IncludeIf.NotEmpty, IncludeIf.NotDefault:
+    begin
+      if (Result as TJSONObject).Count = 0 then
+        FreeAndNil(Result);
+    end;
+  end;
+end;
+
+{ TOpenAPIReferenceSerializer }
+
+class function TOpenAPIReferenceSerializer.CanHandle(AType: PTypeInfo): Boolean;
+begin
+  Result := TypeInfoIs(AType);
+end;
+
+function TOpenAPIReferenceSerializer.Deserialize(AValue: TJSONValue; const AData: TValue;
+    ANeonObject: TNeonRttiObject; AContext: IDeserializerContext): TValue;
+begin
+  Result := nil;
+end;
+
+class function TOpenAPIReferenceSerializer.GetTargetInfo: PTypeInfo;
+begin
+  Result := TOpenAPIModelReference.ClassInfo;
+end;
+
+function TOpenAPIReferenceSerializer.Serialize(const AValue: TValue;
+    ANeonObject: TNeonRttiObject; AContext: ISerializerContext): TJSONValue;
+var
+  LRefObj: TOpenAPIModelReference;
+  LType: TRttiType;
+begin
+  LRefObj := AValue.AsType<TOpenAPIModelReference>;
+  if LRefObj = nil then
+    Exit(nil);
+
+  if Assigned(LRefObj.Reference) and not (LRefObj.Reference.Ref.IsEmpty) then
+    Result := TJSONString.Create(LRefObj.Reference.Ref)
+    //AContext.WriteDataMember(LRefObj.Reference)
   else
-    Result := nil;
+  begin
+    LType := TRttiUtils.Context.GetType(AValue.TypeInfo);
+    Result := TJSONObject.Create;
+    AContext.WriteMembers(LType, AValue.AsObject, Result);
+  end;
+
+  case ANeonObject.NeonInclude.Value of
+    IncludeIf.NotEmpty, IncludeIf.NotDefault:
+    begin
+      if (Result as TJSONObject).Count = 0 then
+        FreeAndNil(Result);
+    end;
+  end;
+
 end;
 
 { TOpenAPISchemaSerializer }
 
 class function TOpenAPISchemaSerializer.CanHandle(AType: PTypeInfo): Boolean;
 begin
-  if AType = GetTargetInfo then
-    Result := True
-  else
-    Result := False;
+  Result := TypeInfoIs(AType);
 end;
 
-function TOpenAPISchemaSerializer.Deserialize(AValue: TJSONValue; const AData: TValue;
-    ANeonObject: TNeonRttiObject; AContext: IDeserializerContext): TValue;
+function TOpenAPISchemaSerializer.Deserialize(AValue: TJSONValue;
+  const AData: TValue; ANeonObject: TNeonRttiObject;
+  AContext: IDeserializerContext): TValue;
 begin
-  Result := nil;
+
 end;
 
 class function TOpenAPISchemaSerializer.GetTargetInfo: PTypeInfo;
 begin
-  Result := TypeInfo(TOpenAPISchemaContainer);
+  Result := TOpenAPISchema.ClassInfo;
 end;
 
 function TOpenAPISchemaSerializer.Serialize(const AValue: TValue;
-    ANeonObject: TNeonRttiObject; AContext: ISerializerContext): TJSONValue;
+  ANeonObject: TNeonRttiObject; AContext: ISerializerContext): TJSONValue;
 var
-  LValue: TOpenAPISchemaContainer;
+  LSchema: TOpenAPISchema;
+  LType: TRttiType;
 begin
-  LValue := AValue.AsType<TOpenAPISchemaContainer>;
+  LSchema := AValue.AsType<TOpenAPISchema>;
 
-  if Assigned(LValue.JSONObject) then
-    Result := LValue.JSONObject.Clone as TJSONObject
+  if LSchema = nil then
+    Exit(nil);
+
+  // It's also a reference object
+  if Assigned(LSchema.Reference) and not (LSchema.Reference.Ref.IsEmpty) then
+  begin
+    Result := AContext.WriteDataMember(LSchema.Reference);
+    Exit;
+  end;
+
+  if Assigned(LSchema.JSONObject) then
+    Result := LSchema.JSONObject.Clone as TJSONObject
   else
-    Result := AContext.WriteDataMember(LValue.JSONSchema);
+  begin
+    LType := TRttiUtils.Context.GetType(AValue.TypeInfo);
+    Result := TJSONObject.Create;
+    AContext.WriteMembers(LType, AValue.AsObject, Result);
+  end;
+
+  case ANeonObject.NeonInclude.Value of
+    IncludeIf.NotEmpty, IncludeIf.NotDefault:
+    begin
+      if (Result as TJSONObject).Count = 0 then
+        FreeAndNil(Result);
+    end;
+  end;
+end;
+
+procedure RegisterOpenAPISerializers(ARegistry: TNeonSerializerRegistry);
+begin
+  ARegistry.RegisterSerializer(TNullableStringSerializer);
+  ARegistry.RegisterSerializer(TNullableBooleanSerializer);
+  ARegistry.RegisterSerializer(TNullableIntegerSerializer);
+  ARegistry.RegisterSerializer(TNullableInt64Serializer);
+  ARegistry.RegisterSerializer(TNullableDoubleSerializer);
+  ARegistry.RegisterSerializer(TNullableTDateTimeSerializer);
+
+  ARegistry.RegisterSerializer(TOpenAPIReferenceSerializer);
+  ARegistry.RegisterSerializer(TOpenAPISchemaSerializer);
 end;
 
 end.
